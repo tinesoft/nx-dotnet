@@ -1,0 +1,97 @@
+From 93747129bb7e0d285bf2e79dd1ffc38ede88a431 Mon Sep 17 00:00:00 2001
+From: Tine Kondo <kondotine@gmail.com>
+Date: Sun, 14 Jan 2024 19:20:01 +0000
+Subject: [PATCH] feat: add options to sync the `gh-pages` branch with the base
+ branch of the repository
+
+---
+ .../src/executors/deploy/executor.spec.ts        |  3 +++
+ .../nx-ghpages/src/executors/deploy/executor.ts  | 10 ++++++++++
+ .../nx-ghpages/src/executors/deploy/schema.d.ts  |  3 +++
+ .../nx-ghpages/src/executors/deploy/schema.json  | 16 ++++++++++++++++
+ 4 files changed, 32 insertions(+)
+
+diff --git a/packages/nx-ghpages/src/executors/deploy/executor.spec.ts b/packages/nx-ghpages/src/executors/deploy/executor.spec.ts
+index 7c805ee..6a6aaac 100644
+--- a/packages/nx-ghpages/src/executors/deploy/executor.spec.ts
++++ b/packages/nx-ghpages/src/executors/deploy/executor.spec.ts
+@@ -22,6 +22,9 @@ const options: BuildExecutorSchema = {
+   remote: '',
+   remoteName: '',
+   commitMessage: '',
++  baseBranch: '',
++  syncWithBaseBranch: false,
++  syncStrategy: 'rebase',
+ };
+ 
+ describe('Build Executor', () => {
+diff --git a/packages/nx-ghpages/src/executors/deploy/executor.ts b/packages/nx-ghpages/src/executors/deploy/executor.ts
+index 732536b..2142546 100644
+--- a/packages/nx-ghpages/src/executors/deploy/executor.ts
++++ b/packages/nx-ghpages/src/executors/deploy/executor.ts
+@@ -6,6 +6,7 @@ import { join } from 'path';
+ import { promisify } from 'util';
+ 
+ import { BuildExecutorSchema } from './schema';
++import { readNxJson } from 'nx/src/config/nx-json';
+ 
+ const exec = promisify(execCallback);
+ 
+@@ -60,6 +61,15 @@ export default async function deployExecutor(options: BuildExecutorSchema) {
+     logger.warn('Resetting gh-pages branch, as it already exists.');
+     await exec(`git checkout -B gh-pages`, { cwd: directory });
+   }
++  if (options.syncWithBaseBranch) {
++    const baseBranch =
++      options.baseBranch || readNxJson()?.affected?.defaultBase || 'master';
++    const syncStrategy = options.syncStrategy;
++    await exec(`git ${syncStrategy} ${options.remoteName}/${baseBranch}`, {
++      cwd: directory,
++    });
++  }
++
+   await exec(`git push -f --set-upstream ${options.remoteName} gh-pages`, {
+     cwd: directory,
+   });
+diff --git a/packages/nx-ghpages/src/executors/deploy/schema.d.ts b/packages/nx-ghpages/src/executors/deploy/schema.d.ts
+index 229b3cd..edcac5b 100644
+--- a/packages/nx-ghpages/src/executors/deploy/schema.d.ts
++++ b/packages/nx-ghpages/src/executors/deploy/schema.d.ts
+@@ -3,4 +3,7 @@ export interface BuildExecutorSchema {
+   directory: string;
+   remoteName: string;
+   commitMessage: string;
++  baseBranch: string;
++  syncWithBaseBranch: boolean;
++  syncStrategy: 'rebase' | 'merge';
+ }
+diff --git a/packages/nx-ghpages/src/executors/deploy/schema.json b/packages/nx-ghpages/src/executors/deploy/schema.json
+index 1683e77..14fb1de 100644
+--- a/packages/nx-ghpages/src/executors/deploy/schema.json
++++ b/packages/nx-ghpages/src/executors/deploy/schema.json
+@@ -22,6 +22,22 @@
+       "type": "string",
+       "description": "Message of the git commit to gh-pages branch",
+       "default": "chore: :rocket: deploy new version to Github Pages"
++    },
++    "baseBranch": {
++      "type": "string",
++      "description": "Base branch to sync the gh-pages branch with",
++      "default": "master"
++    },
++    "syncWithBaseBranch": {
++      "type": "string",
++      "description": "Indicate if the gh-pages branch should be synced (rebased) with the base branch",
++      "default": "false"
++    },
++    "syncStrategy": {
++      "type": "string",
++      "description": "Git command to use to sync gh-pages branch with base branch",
++      "enum": ["rebase", "merge"],
++      "default": "rebase"
+     }
+   },
+   "required": ["remote", "directory"]
+-- 
+2.43.0
+
